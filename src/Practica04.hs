@@ -43,7 +43,7 @@ success :: Estado -> Bool
 success (_, e) = if e == [] then True else False
 
 
---Funcón para saber si una clausula es unitaria
+--Función para saber si una clausula es unitaria
 esUnitaria :: Clausula -> Bool
 esUnitaria [] = False
 esUnitaria [x] = True
@@ -68,7 +68,7 @@ obtenerLiteral [x] = x
 obtenerLiteral xs = Var ""
 
 
---Función para formal las tuplas de valores del modelo
+--Función que dada Clausula / Literal, la agrega a la interpretacion con su valor de verdad
 darValor :: Clausula -> Interpretacion
 darValor [Var p] = [(p, True)]
 darValor [Not (Var p)] = [(p, False)]
@@ -101,7 +101,7 @@ eliminaLiteral :: Literal -> [Clausula] -> [Clausula]
 eliminaLiteral lit [] = []
 eliminaLiteral lit (x:xs) = if estaEn lit x then eliminaLiteral lit xs else [x] ++ eliminaLiteral lit xs 
 
---Función para dar la literal segun su forma de interpretación
+--Función para dar la literal segun su forma en la interpretación
 reversoInterpretacion :: (String, Bool) -> Literal
 reversoInterpretacion (p, True) = Var p
 reversoInterpretacion (p, False) = Not (Var p)
@@ -124,13 +124,14 @@ esComplementaria (Var p) (Not (Var q)) = if p == q then True else False
 esComplementaria (Not (Var p)) (Var q) = if p == q then True else False
 esComplementaria p q = False
 
+--Función que dada una literal y una clausula, quita la literal complementaria de la clausula
 reduceClausula :: Literal -> Clausula -> Clausula
 reduceClausula lit [] = []
 reduceClausula lit (x:xs) = if esComplementaria lit x 
                             then reduceClausula lit xs
                             else [x] ++ reduceClausula lit xs
 
-
+--Función que dada una literal y una lista de clasulas, reduce para tal literal cada clausula de la lista
 reduceTotal :: Literal -> [Clausula] -> [Clausula]
 reduceTotal lit [] = []
 reduceTotal lit (x:xs) = [reduceClausula lit x] ++ reduceTotal lit xs
@@ -141,39 +142,43 @@ red ([], cl) = ([], cl)
 red ((x:xs), cl) = preservaInterpretacion ([x], []) (red (xs, (reduceTotal (reversoInterpretacion x) cl)))
 
 
---Da complemento
+--Función que genera el complemento de una literal
 complemento :: Literal -> Literal
 complemento (Var p) = Not (Var p)
 complemento (Not (Var p)) = (Var p)
 
 --Ejercicio 6
 sep :: Literal -> Estado -> (Estado, Estado)
---sep lit (modelo, clausulas) = ( preservaInterpretacion (darValor [lit], []) (modelo, clausulas), preservaInterpretacion (darValor [complemento lit], []) (modelo, clausulas) )  
 sep lit (modelo, clausulas) = ( preservaInterpretacion (darValor [complemento lit], []) (modelo, clausulas), preservaInterpretacion (darValor [lit], []) (modelo, clausulas) )  
 
 
 --IMPLEMENTACION PARTE 2
 
---Función para aplanar las clausulas
+--Función para aplanar las lista de clausulas, en una sola "clausula"
 aplanaClausulas :: [Clausula] -> [Literal]
 aplanaClausulas [] = []
 aplanaClausulas (x:xs) = x ++ aplanaClausulas xs
 
+--Funcion que dada una lista de literales y su frecuencia y un elemento "inicial" regresa la literal que tuvo
+--el mayor numero de apariciones
 regresaMaximoAux :: [(Literal, Int)] -> (Literal, Int) -> Literal
 regresaMaximoAux [] (a, b) = a
 regresaMaximoAux ((a, b):xs) (c, d) = if d > b 
                                         then regresaMaximoAux xs (c, d)
                                         else regresaMaximoAux xs (a, b) 
 
+--Funcion que dada una lista de pares de literales sus numero de ocurrencias regresa la literal con mayor frecuencia 
 regresaMaximo :: [(Literal, Int)] -> Literal
 regresaMaximo (x:xs) = regresaMaximoAux xs x  
 
-
+--Funcion que recibe una literal y una lista con literales y su frecuencia, la agrega si no estaba o la aumenta 
+--si estaba
 sumaLiteral :: Literal -> [(Literal, Int)] -> [(Literal, Int)]
 sumaLiteral x [] = [(x,1)]
 sumaLiteral x ((a,b):ys) = if x == a then [(a,b+1)] ++ ys else [(a,b)] ++ sumaLiteral x ys
 
-
+--Función que dada una lista de literales, regresa una lista de pares de la literal y su número de apariciones en la 
+--lista original
 ocurrencias :: [Literal] -> [(Literal, Int)]
 ocurrencias [] = []
 ocurrencias (x:xs) = sumaLiteral x (ocurrencias xs)
@@ -182,10 +187,12 @@ ocurrencias (x:xs) = sumaLiteral x (ocurrencias xs)
 heuristicsLiteral :: [Clausula] -> Literal
 heuristicsLiteral cl = regresaMaximo (ocurrencias (aplanaClausulas cl))
 
+--Función que dada un dupla regresa el segundo elemento
 segundoElemento :: (a,b) -> b
 segundoElemento (_, y) = y
 
-
+--Función que dado un estado llena el ArbolDPLL aplicando las reglas que se implementaron arriba
+--Genera todas las posibles ramas, así tendrá todos los sucess y los conflicts.
 construirArbolDPLL :: Estado -> ArbolDPLL
 construirArbolDPLL estado 
     | conflict estado = Node estado Void
@@ -197,7 +204,8 @@ construirArbolDPLL estado
         literal = heuristicsLiteral (segundoElemento estado)
         (izq, der) = sep literal estado
 
-
+--Función que recorre el arbol generado con la función de arriba, para regresar el primer estado de sucess que encuentre, o
+--en todo caso regresará el estado ([], [])
 explorarArbolDPLL :: ArbolDPLL -> Estado
 explorarArbolDPLL (Node estado Void) = estado
 explorarArbolDPLL (Node _ subArbol) = explorarArbolDPLL subArbol
@@ -206,6 +214,7 @@ explorarArbolDPLL (Branch estado izq der)
     | conflict (explorarArbolDPLL izq) = explorarArbolDPLL der
     | otherwise = explorarArbolDPLL izq
 
+--Funicón que dado un estado regresa la interpretación, es decir, el 1er elemento de la dupla
 regresaInterpretacion :: Estado -> Interpretacion 
 regresaInterpretacion (a, _) = a
 
@@ -224,8 +233,6 @@ dpll claus = if conflict (explorarArbolDPLL (construirArbolDPLL ([], claus)))
 {-
 FORMAS NORMALES
 -}
-
---Ejercicio 1
 
 {-
 Función auxiliar para quitar implicaciones y doble implicaciones de una proposición 
@@ -267,8 +274,6 @@ fnnAux (And p q)    = And (fnnAux p) (fnnAux q)
 fnn :: Prop -> Prop
 fnn p = fnnAux (quitaImpl p)
 
-
---Ejercicio 2
 
 {-
 Función que toma dos proposiciones (dado que suponemos que solo se llamará
